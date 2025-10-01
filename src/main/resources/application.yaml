@@ -1,0 +1,28 @@
+server:
+  servlet:
+    session:
+      timeout: 5s
+
+spring:
+  application:
+    name: sas-issue-1603
+  security:
+    user:
+      name: test
+      password: '{noop}password'
+    oauth2:
+      authorizationserver:
+        client:
+          oidc-debugger:
+            registration:
+              client-id: my-client
+              client-secret: "{noop}secret"
+              client-authentication-methods:
+                - "client_secret_basic"
+              redirect-uris: http://127.0.0.1:8080/login/oauth2/code/my-client
+              authorization-grant-types:
+                - authorization_code
+                - refresh_token
+              scopes: openid, profile, account, offline_access
+            token:
+              reuse-refresh-tokens: false
