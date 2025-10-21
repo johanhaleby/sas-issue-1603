@@ -12,10 +12,16 @@ import io.restassured.module.kotlin.extensions.When
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.*
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.security.oauth2.core.oidc.endpoint.OidcParameterNames
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType
 import org.springframework.web.util.UriComponentsBuilder
 import java.net.URI
+import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayNameGeneration(DisplayNameGenerator.Simple::class)
@@ -27,6 +33,13 @@ class Issue1603Test {
 
     @Autowired
     lateinit var properties: Properties
+
+    @Autowired
+    @Qualifier("tokenExpiryRef")
+    lateinit var tokenExpiryRef: AtomicReference<Instant?>
+
+    @Autowired
+    lateinit var authorizationService : OAuth2AuthorizationService
 
     @Test
     fun `can logout with valid id token hint and session`() {
@@ -93,7 +106,6 @@ class Issue1603Test {
         assertThat(redirectUrlAfterLogout).endsWith(expectedUriAfterLogout)
     }
 
-    // I couldn't find a way to configure id-token timeout in application.yaml so there's not test for that
     @Test
     fun `can logout with valid id token hint and expired session`() {
         // Given
@@ -101,6 +113,20 @@ class Issue1603Test {
         val idToken = loginAndExchangeCodeForTokens(sessionFilter)
 
         Thread.sleep(properties.sessionTimeout.plusSeconds(1))
+
+        // When
+        val redirectUrlAfterLogout = logout(idToken, sessionFilter)
+
+        // Then
+        assertThat(redirectUrlAfterLogout).endsWith(expectedUriAfterLogout)
+    }
+
+    @Test
+    fun `can logout with valid id expired token hint and valid session`() {
+        // Given
+        val sessionFilter = SessionFilter()
+        tokenExpiryRef.set(Instant.now().minusSeconds(1))
+        val idToken = loginAndExchangeCodeForTokens(sessionFilter)
 
         // When
         val redirectUrlAfterLogout = logout(idToken, sessionFilter)
@@ -122,6 +148,11 @@ class Issue1603Test {
     @AfterEach
     fun `reset rest assured`() {
         RestAssured.reset()
+    }
+
+    @AfterEach
+    fun `reset token expiry reference`() {
+        tokenExpiryRef.set(null)
     }
 
     private fun loginAndExchangeCodeForTokens(sessionFilter: SessionFilter): String {
